@@ -1,0 +1,246 @@
+---
+title:  "Homework 1 -- Student debt loan"
+output: html_notebook
+author: Caroline Yu 
+---
+
+```{r Setup, include=FALSE, results='hide', warning=FALSE}
+library(knitr)
+opts_chunk$set(fig.path="figures/",
+               cache.path="cache/",
+               cache=FALSE,
+               echo=TRUE,
+               message=FALSE,
+               warning=FALSE)  
+```  
+
+```{r}
+data <- read.delim("/Users/carolineyu/Documents/GitHub/course_materials/Exercises/03_student_loans/data/survey_SCF.txt", sep = ",")
+```
+
+```{r message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+```
+
+#### 1. Debt over time
+
+```{r}
+data1 <- data %>%
+  group_by(YEAR) %>%
+  summarise(avg_debt = mean(DEBT, na.rm = TRUE))
+```
+
+```{r}
+debt_graph <- ggplot(data1, aes(YEAR, avg_debt)) + geom_line()
+debt_graph
+```
+I draw a graph whose x-axis is YEAR, and y-axis is averge of debt the households have. This graph indicates that the average amount of debt decrease since 2007.
+
+```{r}
+data2 <- data %>%
+  mutate(eduratio = EDN_INST/DEBT) %>%
+  group_by(YEAR) %>%
+  summarise(avg_eduratio = mean(eduratio, na.rm = TRUE))
+```
+
+```{r}
+educratio_graph <- ggplot(data2, aes(YEAR, avg_eduratio, col = )) + geom_line()
+educratio_graph 
+```
+And the averge ratio of education loan to debt is growing, which indicates that education loan plays a more and more important role in the debt.
+
+```{r}
+data3 <- data %>%
+  group_by(YEAR) %>%
+  summarise(avg_installratio = mean(INSTALL/DEBT,na.rm = TRUE),
+           avg_vehiratio = mean(VEH_INST/DEBT,na.rm = TRUE),
+           avg_eduratio = mean(EDN_INST/DEBT,na.rm = TRUE),
+           avg_mortratio = mean(NH_MORT/DEBT,na.rm = TRUE),
+           avg_othratio = mean(OTHLOC/DEBT, na.rm = TRUE),
+           avg_ccbratio = mean(CCBAL/DEBT, na.rm = TRUE)) 
+ data61 <- gather(data3, key = variable , value = mean, -YEAR)
+```
+
+```{r}
+bar1 <- ggplot(data61,aes(x = variable, y = mean)) + geom_bar(stat = 'identity', aes(fill = variable)) + facet_wrap(vars(YEAR)) + labs(xlab = "loan/debt ratio", y = "Mean Value", title = "Different Debt Ratio from 1989 to 2016") +  theme(axis.text.x=element_blank())
+bar1
+```
+
+```{r}
+data4 <- data %>%
+  group_by(YEAR) %>%
+  summarise(avg_install = mean(INSTALL,na.rm = TRUE),
+           avg_vehi = mean(VEH_INST,na.rm = TRUE),
+           avg_edu = mean(EDN_INST,na.rm = TRUE),
+           avg_mort = mean(NH_MORT,na.rm = TRUE),
+           avg_oth = mean(OTHLOC, na.rm = TRUE),
+           avg_ccb = mean(CCBAL, na.rm = TRUE)) 
+```
+```{r}
+library(tidyr)
+ data51 <- gather(data4, key = variable , value = mean, -YEAR)
+```
+
+```{r}
+bar <- ggplot(data51,aes(x = variable, y = mean)) + geom_bar(stat = 'identity', aes(fill = variable)) + facet_wrap(vars(YEAR)) +  labs(xlab = "Different loans", y = "Mean Value", title = "Different Debt Amount from 1989 to 2016") +  theme(axis.text.x=element_blank())
+bar
+```
+
+
+```{r}
+p1 <- ggplot(data3, aes(x = YEAR)) + geom_line(aes(y=avg_installratio, col = "avg_installratio")) + geom_line(aes(y = avg_vehiratio, col = "avg_vehiratio")) + geom_line(aes(y=avg_eduratio, col = "avg_eduratio")) + geom_line(aes(y= avg_mortratio, col = "avg_mortraitio")) +  geom_line(aes(y= avg_othratio, col = "avg_othratio"))+  geom_line(aes(y=avg_ccbratio, col = "avg_ccbratio")) + labs(x = "YEAR", y = "Percentage", title = "Change in percentage of loans in debt from 1989 - 2016")
+p1
+```
+If audiences want know the change of these loans during Year 1989-2016, I would recommend them use the line. However, if we are going to look at in each year, the propotion of different types of loans, I would use bar and facet by years.
+
+### 2. Tell me who you are
+```{r}
+datawho <- filter(data, YEAR == 2016)
+```
+
+```{r}
+datawho1 <- datawho%>%
+  select(c("AGECL","KIDS","MARRIED","EDUC","DEBT2INC","LEVRATIO","NETWORTH"))
+```
+
+```{r}
+datawho2 <- datawho1 %>%
+  mutate(KIDS1 = ifelse(KIDS >0, 1, 0))%>%
+  group_by(AGECL, KIDS1, EDUC) %>%
+  summarise(avg_DEBT2INC = mean(DEBT2INC, na.rm = TRUE),
+            avg_NEWWORTH = mean(NETWORTH, na.rm = TRUE))%>%
+  arrange(AGECL)
+```
+
+
+```{r}
+p2 <- ggplot(datawho2) + geom_col(aes(x=EDUC, y=avg_DEBT2INC, fill = 'red' )) + facet_wrap(vars(KIDS1)) + labs(title = "Relationship between debt to income and education degree")
+p2
+```
+
+```{r}
+p3 <- ggplot(datawho1) + geom_boxplot(aes(y=DEBT2INC, color = factor(EDUC))) + scale_y_log10() + labs(title = "Relationship between debt to income and education degree")
+p3
+```
+I would recommend the box plot. It shouws the tendeny the debt to income change in different education groups. And it contains more information than I use the average of debt to income in different eduction levels.
+
+## 3. Wealth and Income Distribution
+
+We may expect households with higher incomes, larger capital gains, and more wealth to generally be less indebted. On the other hand, higher incomes may be the result of longer (and potentially more expensive) education. Again, using the data from 2016 only, investigate how income and wealth are related to student loan debt. Consider using the variables Income percentile groups (INCCAT) and Net worth percentile groups (NWCAT) for this analysis.
+
+Show 1-2 visualizations for this section, and as before, briefly tell the editor what you recommend.
+
+```{r}
+data2016 <- filter(data, YEAR == 2016)
+```
+
+```{r}
+wealdata <- select(data2016, c("EDUC","EDN_INST","INCCAT","NWCAT"))
+```
+
+```{r}
+wealdata2 <- wealdata %>%
+  group_by(NWCAT, INCCAT) %>%
+  summarise(avg_edn = mean(EDN_INST))
+w2 <- ggplot(wealdata2) + geom_col(aes(INCCAT, avg_edn)) + facet_wrap(vars(NWCAT)) 
+w2
+```
+```{r}
+w3 <- ggplot(wealdata) + geom_boxplot(aes(y = EDN_INST, color = factor(INCCAT))) + scale_y_log10()
+w3
+```
+
+For people from higher income percentile groups, they would probably have more education loans. And for people who are rich, they would hardly have education loans. I would recommend editor to combine two graphs together, since it can show the relationship between education loans, income, education degree and the networth.
+
+### 4. Going broke
+
+```{r}
+broke_data <- select(data2016, c("BNKRUPLAST5","FOODHOME","FOODDELV","FOODAWAY","PIRTOTAL"))
+```
+
+```{r}
+broke_data2 <- data %>%
+  group_by(BNKRUPLAST5, YEAR) %>%
+  summarise(
+    avg_edu_debt_ratio = mean(EDN_INST/DEBT, na.rm = TRUE)
+  )
+broke_data2
+```
+
+```{r}
+b2 <- ggplot(filter(broke_data2, YEAR > 1996), aes(x= YEAR, y = avg_edu_debt_ratio)) + geom_bar(stat="identity",aes(fill = factor(BNKRUPLAST5)), position = "dodge") + ggtitle("Average ratio of EDUC/DEBT from 1998-2016") 
+b2
+```
+For people who finally go bankrupt, they usually have higher education loan than people who don't go bankrupt. And as time went by, the education loan takes a large propotion of total debt.
+
+```{r}
+broke_data1 <- broke_data%>%
+  filter(BNKRUPLAST5 == 1) %>%
+  mutate(goodfood = FOODAWAY + FOODDELV)
+```
+
+```{r}
+f <- ggplot(broke_data1, aes(y = PIRTOTAL)) + geom_point(mapping = aes(x = goodfood, col = "goodfood")) + geom_point(mapping = aes(x = FOODHOME, col = 'FOODHOME')) + labs(x = "count", y = "Pirototal", title = "Bankrupt people non-thrifty behavior")  
+f
+```
+For people who go bankrupt, they tend to eat at home rather than have food delivery or eat outside.
+
+```{r}
+broke_data3 <- broke_data%>%
+  filter(BNKRUPLAST5 == 0) %>%
+  mutate(goodfood = FOODAWAY + FOODDELV)
+```
+
+```{r}
+g <- ggplot(broke_data3) + geom_point(mapping = aes(x = goodfood, y = FOODHOME)) +geom_abline(aes(intercept = 0, slope = 1, color = "red")) + xlim(0, 10000) + ylim(0, 10000)
+g 
+```
+People who don't go bankrupt tend to eat at home rather than eat outside or have a food delivery. However, the tendency they order a food delivery or eat outside is much higher than people who go bankrupt.
+
+### 5. Make two plots interactive 
+```{r}
+library(plotly)
+ggplotly(b2)
+```
+This graph can tell people how the education loan play an important role in the total debt people have as time went by.
+
+```{r}
+ggplotly(bar)
+```
+This graph indicate that in each year, different types of loans people have, and readers can have straightforward information about the change of amount each loan in different years.
+### 6. Data Table 
+```{r}
+library(DT)
+datafinal <- data %>%
+ group_by(AGECL,YEAR) %>%
+ summarise(
+   avg_install = mean(INSTALL,na.rm = TRUE),
+           avg_vehi = mean(VEH_INST,na.rm = TRUE),
+           avg_edu = mean(EDN_INST,na.rm = TRUE),
+           avg_mort = mean(NH_MORT,na.rm = TRUE),
+           avg_oth = mean(OTHLOC, na.rm = TRUE),
+           avg_ccb = mean(CCBAL, na.rm = TRUE)) 
+datatable(datafinal)
+```
+
+```{r}
+datafinal %>%
+  datatable(
+    rownames = FALSE,
+    filter = list(position = "top"),
+    options = list(language = list(sSearch = "Filter:"))
+  )
+```
+ This table is going to look at at different years, at different age groups the average of different types of loans the householders have.
+
+
+
+
+
+
+
+
+
+

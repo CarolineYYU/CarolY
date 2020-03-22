@@ -1,0 +1,276 @@
+---
+title: "HWK2 Data Visualization"
+author: Caroline Yu 
+date: 2020/3/20
+output:
+  html_document:
+    df_print: paged
+---
+```{r Setup, include = FALSE, results='hide', warning=FALSE}
+library(knitr)
+opts_chunk$set(fig.path = "figures/",
+               cache.path= "cache/",
+               cache= FALSE,
+               echo = TRUE,
+               message = FALSE,
+               warning = FALSE)
+
+```
+
+```{r message=FALSE}
+library(dplyr)
+library(devtools)
+library(leaflet)
+```
+
+#### 1. Location of Severe Fires
+```{r message=FALSE}
+building_fire <- read.csv("/Users/carolineyu/Documents/1111/course_materials/Exercises/07_fire/building_fires.csv")
+FDNY <- read.csv("/Users/carolineyu/Documents/1111/course_materials/Exercises/07_fire/FDNY_Firehouse_Listing.csv")
+```
+
+```{r message=FALSE}
+building_fire$HIGHEST_LEVEL_DESC <- case_when( building_fire$HIGHEST_LEVEL_DESC == " 0 - Initial alarm" ~"0 - Initial alarm",
+building_fire$HIGHEST_LEVEL_DESC == "11 - First Alarm " ~ "1 - Initial alarm, less than 10-75",
+building_fire$HIGHEST_LEVEL_DESC == "1 - More than initial alarm, less than Signal 7-5" ~ "1 - More than initial alarm, less than Signal 7-5 ",
+building_fire$HIGHEST_LEVEL_DESC %in% c("2 - 2nd alarm ","22 - Second Alarm") ~ "2 - 2nd alarm",
+building_fire$HIGHEST_LEVEL_DESC %in% c("3 - 3rd alarm ", "33 - Third Alarm ") ~ "3 - 3rd alarm",
+building_fire$HIGHEST_LEVEL_DESC %in% c("4 - 4th alarm", "44 - Fourth Alarm") ~ "4 - 4th alarm",
+building_fire$HIGHEST_LEVEL_DESC %in% c("5 - 5th alarm", "55 - Fifth Alarm ") ~ "5 - 5th alarm",
+building_fire$HIGHEST_LEVEL_DESC %in% c("7 - Signal 7-5", "75 - All Hands Working") ~ "7 - Signal 7-5")
+Highest_severity <- building_fire %>%
+  filter(HIGHEST_LEVEL_DESC == "7 - Signal 7-5")
+```
+#### I regroup the HIGHEST_LEVEL_DESC based on the code book. The raw data were quite messy. After regrouping the data, we can divide the the HIGHEST_LEVEL_DESC in 8 groups. However, as a matter of fact, there are only groups of HIGHEST_LEVEL_DESC IN dataset, also remaining NAs, which can't be assigned into any groups.
+
+```{r message=FALSE}
+content <- paste("Severity:", Highest_severity$HIGHEST_LEVEL_DESC,"<br/c>",
+                 "When:",Highest_severity$INCIDENT_DATE_TIME,"<br/c>",
+                 "Where:",Highest_severity$PROPERTY_USE_DESC,"<br/c")
+```
+#### I want the popup shows the WHERE, WHEN, AND SEVERITY of the incidents.
+
+```{r message=FALSE}
+m <- leaflet(Highest_severity) %>%
+  addTiles()
+m1 <- m %>%
+  addCircles(lng = ~lon, lat = ~lat, popup = content)
+m1
+```
+
+#### 2. Layers and Clusters
+(a) Color by Type of Property 
+```{r message=FALSE}
+building_fire$PROPERTY_USE_DESC <- case_when(grepl("dwelling",building_fire$PROPERTY_USE_DESC)== TRUE | building_fire$PROPERTY_USE_DESC %in% c("400 - Residential, other  ","439 - Boarding/rooming house, residential hotels "," 449 - Hotel/motel, commercial"," 460 - Dormitory-type residence, other ","464 - Barracks, dormitory ") ~ "Dwelling, Residential",building_fire$PROPERTY_USE_DESC%in% c(" 161 - Restaurant or cafeteria") ~"Restaurant",building_fire$PROPERTY_USE_DESC%in% c("881 - Parking garage, (detached residential garage)","965 - Vehicle parking area "," 882 - Parking garage, general vehicle  ") ~"Parking", building_fire$PROPERTY_USE_DESC%in% c("564 - Laundry, dry cleaning ","579 - Motor vehicle or boat sales, services, repair","559 - Recreational, hobby, home repair sales, pet store ","500 - Mercantile, business, other   ","549 - Specialty shop"," 519 - Food and beverage sales, grocery store ","580 - General retail, other","557 - Personal service, including barber & beauty shops ","511 - Convenience store    ","539 - Household goods, sales, repairs ","183 - Movie theater ","180 - Studio/theater, other ","160 - Eating, drinking places, other ","529 - Textile, wearing apparel sales","581 - Department or discount store","186 - Film/movie production studio","181 - Live performance theater","254 - Day care, in commercial property","161 - Restaurant or cafeteria","142 - Clubhouse ","140 - Clubs, other","143 - Yacht Club ","162 - Bar or nightclub","144 - Casino, gambling clubs","141 - Athletic/health club") ~"Commercial Property", building_fire$PROPERTY_USE_DESC%in% c(" 131 - Church, mosque, synagogue, temple, chapel")  ~ "Religious Places", building_fire$PROPERTY_USE_DESC%in% c(" 173 - Bus station     ","170 - Passenger terminal, other ","174 - Rapid transit station ")  ~ "Public Transportation", grepl("Clinic",building_fire$PROPERTY_USE_DESC) == TRUE | building_fire$PROPERTY_USE_DESC%in% c("331 - Hospital - medical or psychiatric ","311 - 24-hour care Nursing homes, 4 or more persons"," 332 - Hospices "," 300 - Health care, detention, & correction, other ","342 - Doctor, dentist or oral surgeon office"," 321 - Mental retardation/development disability facility"," 340 - Clinics, doctors offices, hemodialysis cntr, other","363 - Reformatory, juvenile detention center") ~ "Clinic",
+building_fire$PROPERTY_USE_DESC%in% c("210 - Schools, non-adult, other","241 - Adult education center, college classroom  ","215 - High school/junior high school/middle school","211 - Preschool","213 - Elementary school, including kindergarten")  ~ "School", building_fire$PROPERTY_USE_DESC%in% c("123 - Stadium, arena"," 931 - Open land or field ","962 - Residential street, road or residential driveway  ","322 - Alcohol or substance abuse recovery center","610 - Energy production plant, other","926 - Outbuilding, protective shelter ","000 - Property Use, other"," 981 - Construction site","459 - Residential board and care  "," 152 - Museum ","130 - Places of worship, funeral parlors, other","963 - Street or road in commercial area ","648 - Sanitation utility","110 - Fixed-use recreation places, other","571 - Service station, gas station ","182 - Auditorium, concert hall  "," 808 - Outbuilding or shed "," 121 - Ballroom, gymnasium  ","112 - Billiard center, pool hall ","569 - Professional supplies, services ","124 - Playground","635 - Computer center","134 - Funeral parlor","984 - Industrial plant yard - area","629 - Laboratory or science lababoratory","936 - Vacant lot","250 - Day care, other (Conversion only)","615 - Electric-generating plant ","639 - Communications center","898 - Dock, marina, pier, wharf ","952 - Railroad yard ")  ~ "Public Area",building_fire$PROPERTY_USE_DESC%in% c("891 - Warehouse","899 - Residential or self-storage units ","880 - Vehicle storage, other  ","800 - Storage, other","839 - Refrigerated storage ","807 - Outside material storage area")  ~ "Warehouse/Storage",building_fire$PROPERTY_USE_DESC%in% c(" 599 - Business office","593 - Office:  veterinary or research ","150 - Public or government, other   ","596 - Post office or mailing firms","365 - Police station","155 - Courthouse","Bank")  ~ "Office")
+```
+
+```{r}
+Highest_severity <- building_fire %>%
+  filter(HIGHEST_LEVEL_DESC == "7 - Signal 7-5")
+```
+
+### I regroup the property type in this section.
+```{r message=FALSE}
+pal = colorFactor("Set1", domain = Highest_severity$PROPERTY_USE_DESC)
+color_pro = pal(Highest_severity$PROPERTY_USE_DESC)
+m2 <- m %>%
+  addCircles(lng = ~lon, lat = ~lat, color = color_pro,popup = ~as.character(Highest_severity$PROPERTY_USE_DESC)) %>%
+addLegend(pal = pal, values = ~ Highest_severity$PROPERTY_USE_DESC, title = "Type of Property")
+m2
+```
+
+(b) Cluster 
+```{r message=FALSE}
+m3 <- m %>%
+addCircleMarkers(lng = ~lon, lat = ~lat,color = color_pro, popup = content, clusterOptions = markerClusterOptions())
+m3
+```
+
+#### 3. Fire House
+```{r message=FALSE, warning=FALSE}
+m_l1 <- leaflet() %>%
+addTiles()%>%
+addCircleMarkers(data = Highest_severity,lng = ~lon, lat = ~lat,group = "Incidents", radius  = ~ Highest_severity$UNITS_ONSCENE,popup = content) %>%
+addCircleMarkers(data = FDNY, lng = ~Longitude, lat = ~Latitude, group = "Firehouses",color = "#F05",popup = ~as.character(FDNY$FacilityName),clusterOptions = markerClusterOptions()) %>%
+addLayersControl(
+baseGroups = c("NYCmap"),
+overlayGroups = c("Incidents","Firehouses"))
+m_l1
+```
+
+#### 4. Distance from Firehouse and Response Time 
+(a) Calculate Distance 
+```{r message=FALSE}
+building_fire1<- building_fire %>%
+mutate(distime = difftime(strptime(as.character(building_fire$ARRIVAL_DATE_TIME),"%m/%d/%Y %I:%M:%S %p"),strptime(as.character(building_fire$INCIDENT_DATE_TIME),"%m/%d/%Y %I:%M:%S %p"),units = "secs"))
+```
+
+```{r message=FALSE}
+library(geosphere)
+library(SoDA)
+library(ggplot2)
+```
+
+```{r message=FALSE}
+fire_lon_lat <- data.frame(building_fire1$lon, building_fire1$lat)
+FDNY_lon_lat <- data.frame(FDNY$Longitude, FDNY$Latitude)
+a <-  distm(as.vector(fire_lon_lat),as.vector(FDNY_lon_lat),fun = distGeo)
+```
+
+```{r message=FALSE}
+building_fire2 <- building_fire1 %>%
+mutate(mindist = NA)
+for (i in 1:nrow(a)) {
+building_fire2$mindist[i] <- min(a[i,],na.rm = TRUE)
+}
+```
+
+```{r message=FALSE}
+building_fire2 <- building_fire2 %>% 
+  mutate(Severity = ifelse(HIGHEST_LEVEL_DESC == '7 - Signal 7-5', "Severe","Non-Severe"))
+```
+
+
+```{r message=FALSE, warning=FALSE}
+p_distance <- ggplot(building_fire2, aes(x = mindist, y = distime)) + geom_point() + xlim(0,5000) + ylim(0,1000) +geom_smooth() + labs(x="Nearest Firehouse in meters", y = "First arrival in secs", title = "Distance From Firehouse V.S. Response Time")
+p_distance
+```
+From the plot of p_distance, we can tell that the nearer the firehouse is, the earlier the FDNY would arrive. The slope is positive.
+```{r message=FALSE, warning=FALSE}
+p_distance1 <- p_distance + facet_wrap(as.factor(building_fire2$Severity))
+p_distance1
+```
+I facet the plot with the severity of the incident, and we can tell that most of plots show a positive relationship between the distance and time of arrival. 
+
+(b) Map of Response Times 
+```{r message=FALSE}
+library(rgdal)
+library(geojson)
+```
+
+```{r message=FALSE}
+library(geojsonio)
+```
+
+```{r message=FALSE}
+nycity <- readOGR("/Users/carolineyu/Desktop/borough_boundaries.geojson", verbose = FALSE)
+```
+
+```{r message=FALSE}
+content_time <- paste("Severity:", building_fire2$HIGHEST_LEVEL_DESC,"<br/c>",
+"When:",building_fire2$INCIDENT_DATE_TIME,"<br/c>",
+"Property Type:",building_fire2$PROPERTY_USE_DESC,"<br/c",
+"Response Time:",building_fire2$distime,"<br/c")
+```
+
+```{r message=FALSE}
+pal = colorFactor("Set1", domain = building_fire2$HIGHEST_LEVEL_DESC)
+color_pro = pal(building_fire2$HIGHEST_LEVEL_DESC)
+NYC_Fires <- leaflet() %>% 
+  addTiles() %>%
+  addCircleMarkers(data = building_fire2,
+                   lng = ~lon, lat = ~lat,
+                   color = pal(building_fire2$HIGHEST_LEVEL_DESC), 
+                   radius = ~(as.numeric(building_fire2$distime))/60,
+                   popup = content_time) %>%
+   addLegend('topright', pal = colorFactor('Set1', domain = building_fire2$HIGHEST_LEVEL_DESC), 
+            values = building_fire2$HIGHEST_LEVEL_DESC, 
+            title = "Severity")
+NYC_Fires
+```
+With the larger the circle, the longer the response time it is.
+
+#### Change of response time over years
+
+This part, I am going to draw 6 maps of average response time from 2013-2018. 
+```{r message=FALSE}
+building_fire2$YEAR <- substring(building_fire2$INCIDENT_DATE_TIME,7,10)
+```
+
+```{r message=FALSE}
+yearly <- building_fire2 %>%
+  group_by(YEAR, BOROUGH_DESC) %>%
+  summarise(avg = mean(distime, na.rm = TRUE))
+```
+
+```{r message=FALSE}
+library(reshape)
+yearly$BOROUGH_DESC <- substring(yearly$BOROUGH_DESC, 5)
+```
+
+```{r message=FALSE}
+nyc_by_year <- full_join(yearly, nycity@data, by = c("BOROUGH_DESC" = "boro_name" ))
+```
+
+```{r message=FALSE}
+mypalette1 <- colorNumeric("YlOrRd", domain = as.numeric(nyc_by_year$avg), c(180,250))
+```
+
+```{r message=FALSE}
+year2013 <- left_join(nycity@data, yearly[yearly$YEAR == 2013, ], by = c("boro_name" = "BOROUGH_DESC"))
+```
+```{r message=FALSE}
+nyc2013 <- leaflet()%>%
+  addTiles() %>%
+  addPolygons(data = nycity, fillColor = ~ mypalette1(as.numeric(year2013$avg)),
+              fillOpacity = 1)%>%
+  addLegend(pal = mypalette1, values = as.numeric(nyc_by_year$avg), title = "YEAR 2013", "topright")
+```
+
+```{r message=FALSE}
+year2014 <- left_join(nycity@data, yearly[yearly$YEAR == 2014, ], by = c("boro_name" = "BOROUGH_DESC"))
+nyc2014 <- leaflet()%>%
+  addTiles() %>%
+  addPolygons(data = nycity, fillColor = ~ mypalette1(as.numeric(year2014$avg)),
+              fillOpacity = 1)%>%
+  addLegend(pal = mypalette1, values = as.numeric(nyc_by_year$avg), title = "YEAR 2014", "topright")
+
+```
+
+```{r message=FALSE}
+year2015 <- left_join(nycity@data, yearly[yearly$YEAR == 2015, ], by = c("boro_name" = "BOROUGH_DESC"))
+nyc2015<- leaflet()%>%
+  addTiles() %>%
+  addPolygons(data = nycity, fillColor = ~ mypalette1(as.numeric(year2015$avg)),
+              fillOpacity = 1)%>%
+  addLegend(pal = mypalette1, values = as.numeric(nyc_by_year$avg), title = "YEAR 2015", "topright")
+```
+
+```{r message=FALSE}
+year2016 <- left_join(nycity@data, yearly[yearly$YEAR == 2016, ], by = c("boro_name" = "BOROUGH_DESC"))
+nyc2016 <- leaflet()%>%
+  addTiles() %>%
+  addPolygons(data = nycity, fillColor = ~ mypalette1(as.numeric(year2016$avg)),
+              fillOpacity = 1)%>%
+  addLegend(pal = mypalette1, values = as.numeric(nyc_by_year$avg), title = "YEAR 2016", "topright")
+```
+
+```{r message=FALSE}
+year2017 <- left_join(nycity@data, yearly[yearly$YEAR == 2017, ], by = c("boro_name" = "BOROUGH_DESC"))
+nyc2017 <- leaflet()%>%
+  addTiles() %>%
+  addPolygons(data = nycity, fillColor = ~ mypalette1(as.numeric(year2017$avg)),
+              fillOpacity = 1)%>%
+  addLegend(pal = mypalette1, values = as.numeric(nyc_by_year$avg), title = "YEAR 2017", "topright")
+```
+```{r message=FALSE}
+year2018 <- left_join(nycity@data, yearly[yearly$YEAR == 2018, ], by = c("boro_name" = "BOROUGH_DESC"))
+nyc2018 <- leaflet()%>%
+  addTiles() %>%
+  addPolygons(data = nycity, fillColor = ~ mypalette1(as.numeric(year2018$avg)),
+              fillOpacity = 1)%>%
+  addLegend(pal = mypalette1, values = as.numeric(nyc_by_year$avg), title = "YEAR 2018", "topright")
+```
+
+```{r message=FALSE}
+library(mapview)
+leafsync::sync(nyc2013,nyc2014,nyc2015,nyc2016,nyc2017,nyc2018)
+```
+
+#### From the maps above, we can tell that the response time from 2013-2017 is almost consistent, however, the response time in 2018 is obviously longer than any of other years.
+
+
+
+
+
