@@ -1,0 +1,463 @@
+---
+title: "HWK3 Data Visualization"
+author: Caroline Yu 
+date: 2020/4/10
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r Setup, include = FALSE, results='hide', warning=FALSE}
+library(knitr)
+opts_chunk$set(fig.path = "figures/",
+               cache.path= "cache/",
+               cache= FALSE,
+               echo = TRUE,
+               message = FALSE,
+               warning = FALSE)
+
+``` 
+
+```{r}
+textdata <- read.csv( "/Users/carolineyu/Documents/1111/course_materials/Exercises/09_kickstarter/kickstarter_projects_2020_02.csv")
+```
+
+#### 1. Identifying Successful Projects
+#### a) Success by Category
+```{r}
+library(tm)
+library(quanteda)
+library(tidytext)
+library(dplyr)
+library(leaflet)
+library(plotrix)
+library(ggplot2)
+library(RColorBrewer)
+library(maptools)
+library(plyr)
+library(tidyverse)
+library(tidytext)
+```
+
+```{r}
+text_backer <- textdata %>%
+  group_by(top_category, state) %>%
+  dplyr::summarise(n = n())
+text_backer
+```
+
+```{r}
+library(ggplot2)
+p1 <- ggplot(text_backer) + geom_bar(aes(x = as.factor(state), y = n,fill = as.factor(state)),stat = "identity") + facet_wrap(as.factor(text_backer$top_category)) + theme(axis.title.x=element_blank(),
+           axis.text.x=element_blank(),
+           axis.ticks.x=element_blank()) 
+p1
+```
+#### From the plot p, we can tell that category Music has the most projects whose state is successful. P2 gives more straight-forward information.
+```{r}
+text_backer1 <- textdata %>%
+  filter(state == "successful") %>%
+  group_by(top_category) %>%
+  dplyr::summarise(n = n())
+```
+
+```{r}
+p2 <- ggplot(text_backer1) + geom_bar(aes(x = top_category, y = n, fill = as.factor(top_category)),stat = "identity")
+p2
+```
+#### I would also use achievement_ratio to define the success of projects.
+```{r}
+achievement_ratio <- textdata %>%
+  filter(state == "successful") %>%
+  mutate(ach_ra = pledged / goal * 100) %>%
+  group_by(top_category) %>%
+  na.omit(ach_ra) %>%
+  select(top_category, ach_ra)
+achievement_ratio
+```
+
+```{r}
+box1 <- ggplot(achievement_ratio) + geom_boxplot(aes(x = top_category, y = ach_ra, fill = as.factor(top_category)), outlier.colour = NA) +  coord_trans(x = "identity", y = "identity", xlim = NULL, ylim = c(0,1e+03)) + theme(axis.title.x=element_blank(),
+           axis.text.x=element_blank(),
+           axis.ticks.x=element_blank()) + labs(x = "Category", y = "Achievement Ratio")+labs(fill = "category")
+box1
+```
+#### Excluding the outliers, the project with largest achievement ratio is in the design category. And the projects in theater has the largest mean value of achievement ratio among categories.
+
+#### BONUS ONLY: b) Success by Location
+```{r}
+success_prjects <- textdata %>%
+  filter(state == "successful") %>%
+  group_by(location_state) %>%
+  dplyr::summarise(n = n()) %>%
+  arrange(desc(n))
+success_prjects
+```
+
+
+```{r}
+American_map <-readShapePoly("/Users/carolineyu/Downloads/USA_map/STATES.SHP")
+AD1 <- American_map@data
+AD2 <- data.frame(id=rownames(AD1),AD1)
+American_map1 <- fortify(American_map)
+American_map_data <- join(American_map1,AD2, type = "full")
+American_map_data<-American_map_data[,1:12]
+```
+
+```{r}
+mydata<-data.frame(STATE_NAME=unique(American_map_data$STATE_NAME),STATE_ABBR=unique(American_map_data$STATE_ABBR))
+```
+
+```{r}
+data1<-subset(American_map_data,STATE_NAME!='Alaska'& STATE_NAME!='Hawaii')
+data2<-subset(American_map_data,STATE_NAME=="Hawaii")    
+data3<-subset(American_map_data,STATE_NAME=="Alaska")
+```
+
+```{r}
+data2$long<-data2$long+65
+data3$long<-data3$long+40
+data3$lat<-data3$lat-42
+data4<-rbind(data1,data2,data3)
+```
+
+```{r}
+colnames(success_prjects) <- c("STATE_ABBR","n")
+```
+
+
+```{r}
+American_data <- join(data4, success_prjects, by=  ,type="full")
+```
+
+```{r}
+midpos <- function(AD1){mean(range(AD1,na.rm=TRUE))} 
+centres <- ddply(American_data,.(STATE_ABBR),colwise(midpos,.(long,lat)))
+mynewdata<-join(centres,success_prjects,by = "STATE_ABBR", type="full")
+```
+
+
+
+```{r}
+content <- paste("State:", mynewdata$STATE_ABBR,"<br/c>",
+"Number of Successful Projects:",mynewdata$n,"<br/c>")
+```
+
+```{r}
+pal = colorFactor("Set1", domain = mynewdata$STATE_ABBR)
+color_pro = pal(mynewdata$STATE_ABBR)
+```
+
+```{r}
+library(leaflet)
+m <- leaflet(mynewdata) %>%
+  addTiles()
+m1 <- m %>%
+  addCircleMarkers(lng = ~long, lat = ~lat, color = color_pro,
+                   popup = content)
+m1
+```
+
+
+
+
+
+#### 2. Writing your success story
+#### a) Cleaning the Text and Word Cloud
+```{r}
+text1 <- textdata %>%
+  filter(state == "successful") %>%
+  mutate(ach_ra = pledged / goal * 100)%>%
+  arrange(desc(ach_ra)) 
+text_success <- text1 %>%
+  head(1000)
+```
+
+#### For successful Porjects
+```{r}
+scs_corpus <- VCorpus(VectorSource(text_success$blurb))
+```
+#### remove unnecessary words (stop words), syntax, punctuation, numbers, white space etc. 
+```{r}
+clean_corpus <- function(corpus){
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeWords, c(stopwords("en")))
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, stripWhitespace)
+return(corpus)}
+```
+
+```{r}
+scs_corpus_clean <- clean_corpus(scs_corpus)
+```
+
+```{r}
+scs_stemmed <- tm_map(scs_corpus_clean, stemDocument)
+```
+
+```{r}
+scs_dtm <- DocumentTermMatrix(scs_stemmed)
+scs_dtm
+```
+
+```{r}
+scs_td <- tidy(scs_dtm) 
+scs_tf_idf <- scs_td %>%
+  bind_tf_idf(term, document, count) %>%
+  arrange(desc(tf_idf))
+scs_tf_idf
+```
+```{r}
+library(wordcloud)
+set.seed(12345)
+purple_orange <- brewer.pal(10, "PuOr")
+purple_orange <- purple_orange[-(2:8)]
+wordcloud(scs_tf_idf$term, scs_tf_idf$tf, max.words = 100, colors = purple_orange )
+```
+
+### b) Success in words
+```{r}
+text2 <- textdata %>%
+  filter(state == "failed") %>%
+  mutate(ach_ra = pledged / goal * 100)%>%
+  arrange(desc(ach_ra)) 
+text_unsuccess <- text2 %>%
+  head(1000)
+```
+
+```{r}
+all_failed <- paste(text_unsuccess$blurb, collapse = "")
+all_success <- paste(text_success$blurb, collapse = "")
+all_proj <- c(all_failed, all_success)
+all_proj <- VectorSource(all_proj)
+all_corpus <- VCorpus(all_proj)
+```
+
+```{r}
+all_clean <- clean_corpus(all_corpus)
+all_tdm <- TermDocumentMatrix(all_clean)
+all_m <- as.matrix(all_tdm)
+```
+
+```{r}
+# Clean the corpus
+all_clean <- clean_corpus(all_corpus)
+
+# Create all_tdm
+all_tdm <- TermDocumentMatrix(all_clean)
+
+# Give the columns distinct names
+colnames(all_tdm) <- c("failed", "success")
+
+# Create all_m
+all_m <- as.matrix(all_tdm)
+
+```
+
+```{r}
+common_words <- subset(
+  all_m,
+  all_m[, 1] > 0 & all_m[, 2] > 0
+)
+
+head(common_words)
+```
+```{r}
+difference <- abs(common_words[, 1] - common_words[, 2])
+common_words <- cbind(common_words, difference)
+common_words <- common_words[order(common_words[, 3],
+                                   decreasing = T), ]
+head(common_words)
+```
+
+```{r}
+top25_df <- data.frame(x = common_words[1:20, 1],
+                       y = common_words[1:20, 2],
+                       labels = rownames(common_words[1:20, ]))
+
+# The plotrix package has been loaded
+
+# Make pyramid plot
+pyramid.plot(top25_df$x, top25_df$y,
+             labels = top25_df$labels, 
+             main = "Words in Common",
+             gap = 18,
+             laxlab = NULL,
+             raxlab = NULL, 
+             unit = NULL,
+             lxcol = "steelblue",
+             rxcol = "darkgreen",
+             top.labels = c("Failed",
+                            "Words",
+                            "Successful")
+             )
+```
+#### c) Simplicity as a virtue
+```{r}
+library(quanteda)
+library(dplyr)
+FRE_textdata_success <- textstat_readability(as.character(text_success$blurb),measure = c('Flesch.Kincaid'))
+FRE_textdata_unsuccess <-  textstat_readability(as.character(text_unsuccess$blurb),measure = c('Flesch.Kincaid'))
+```
+
+```{r}
+FRE_textdata_success1 <- FRE_textdata_success %>%
+  mutate(state = "success")
+FRE_textdata_unsuccess1 <- FRE_textdata_unsuccess %>%
+  mutate(state = "failed")
+FRE_textdata1 <- rbind(FRE_textdata_success1, FRE_textdata_unsuccess1)
+```
+
+```{r}
+p_readibility <- ggplot() + geom_boxplot(aes(y = Flesch.Kincaid, x = as.factor(state), fill = as.factor(state)), data = FRE_textdata1) + labs(x = "Category", y = "Flesch.Kincaid")+labs(fill = "Success or Failed")
+```
+
+```{r}
+p_readibility
+```
+From the box plot, we can tell that the successful projects is slightly hard to understand compared to the projects that are failed. 
+
+#### 3. Sentiment
+#### a) Stay positive
+Calculate the tone of each text based on the positive and negative words that are being used. You can rely on the Hu & Liu dictionary provided in lecture or use the Bing dictionary contained in the tidytext package (tidytext::sentiments). Visualize the relationship between tone of the document and success. Briefly comment.
+```{r}
+pos <- read.table("/Users/carolineyu/Documents/1111/course_materials/Lectures/Week09/data/dictionaries/positive-words.txt", as.is=T)
+neg <- read.table("/Users/carolineyu/Documents/1111/course_materials/Lectures/Week09/data/dictionaries/negative-words.txt", as.is=T)
+```
+
+```{r}
+sentiment <- function(words=c("really great good stuff bad")){
+  require(quanteda)
+  tok <- quanteda::tokens(words)
+  pos.count <- sum(tok[[1]]%in%pos[,1])
+  neg.count <- sum(tok[[1]]%in%neg[,1])
+  out <- (pos.count - neg.count)/(pos.count+neg.count)
+  return(out)}
+```
+
+```{r}
+sucess_tone <- as.data.frame(text_success$blurb)
+sucess_tone <- mutate(sucess_tone, tone = NA)
+sucess_tone <- mutate(sucess_tone,ach_ra = text_success$ach_ra)
+colnames(sucess_tone) <- c("text","tone","ach_ra")
+```
+
+since the row dataset is too large, thus I decide to look at the 1000 documents in success and failed category 
+```{r}
+for (i in 1:nrow(sucess_tone)){
+  sucess_tone$tone[i] <- sentiment(as.character(sucess_tone$text[i]))
+}
+```
+
+```{r}
+unsucess_tone <- as.data.frame(text_unsuccess$blurb)
+unsucess_tone <- mutate(unsucess_tone, tone = NA)
+unsucess_tone <- mutate(unsucess_tone,ach_ra = text_unsuccess$ach_ra)
+colnames(unsucess_tone) <- c("text","tone","ach_ra")
+```
+
+since the row dataset is too large, thus I decide to look at the 1000 documents in success and failed category 
+```{r}
+for (i in 1:nrow(unsucess_tone)){
+  unsucess_tone$tone[i] <- sentiment(as.character(unsucess_tone$text[i]))
+}
+```
+
+```{r}
+sucess_tone1 <- sucess_tone %>%
+  mutate(state = "successful")
+unsucess_tone1 <- unsucess_tone%>%
+    mutate(state = "failed")
+q3a <- rbind(unsucess_tone1,sucess_tone1)
+```
+
+```{r}
+plot1 <- ggplot(q3a)+geom_point(aes(x = tone , y = ach_ra, color = state)) + ylim(0,2e+06) + labs("The relation between achievement ratio and document tone") 
+plot1
+```
+
+From this graph, we can easily tell that for the projects which is successful, have larger document tones. However,for projects which is failed, though some have large document tone, the achievement ratio are all zero. 
+
+#### b) Positive vs negative
+
+```{r}
+pos <- pos %>%
+  mutate(sentiment = "Positive")
+neg <- neg %>%
+  mutate(sentiment = "Negative")
+senti <- rbind(pos, neg)
+colnames(senti) <- c("word","sentiment")
+```
+
+```{r}
+textdata1 <- tibble(text = as.character(q3a$text)) %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words, by = "word") %>%
+  inner_join(senti, by = "word") %>%
+  dplyr::count(word, sentiment,sort = TRUE) %>%
+  ungroup()
+```
+
+```{r}
+library(reshape2)
+textdata1 %>%
+  acast(word~sentiment, value.var= "n", fill = 0) %>%
+  comparison.cloud(colors = c("steelblue","darkgreen"),
+                   max.words = 100)
+```
+
+#### c) Get in their mind
+```{r}
+sucess_tone2 <- tibble(text = as.character(sucess_tone1$text)) %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words, by = "word") %>%
+  inner_join(get_sentiments("nrc"), by = "word") %>%
+  dplyr::count(word, sentiment,sort = TRUE)
+```
+
+```{r}
+sucess_tone2 <- sucess_tone2 %>%
+  mutate(category = "Successful")
+```
+
+```{r}
+unsucess_tone2 <- tibble(text = as.character(unsucess_tone1$text)) %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words, by = "word") %>%
+  inner_join(get_sentiments("nrc"), by = "word") %>%
+  dplyr::count(word, sentiment,sort = TRUE)
+```
+
+```{r}
+unsucess_tone2 <- unsucess_tone2 %>%
+  mutate(category = "Failed")
+```
+
+```{r}
+all_emotion_tone <- rbind(sucess_tone2,unsucess_tone2)
+```
+
+```{r}
+all_emotion_tone
+```
+
+```{r}
+success_emotion <- all_emotion_tone  %>%
+  filter(category == "Successful") %>%
+  head(50)
+unsuccess_emotion <- all_emotion_tone  %>%
+  filter(category == "Failed") %>%
+  head(50) 
+```
+
+```{r}
+emo1 <- ggplot(success_emotion) + geom_col(mapping = aes(x = word, y = n, fill = sentiment))+ facet_wrap(~sentiment, scales = "free_y") + labs(y = "Contribution to sentiment", x = NULL, title = " For successful projects") + coord_flip()
+emo1
+```
+
+```{r}
+emo2 <- ggplot(unsuccess_emotion) + geom_col(mapping = aes(x = word, y = n, fill = sentiment))+ facet_wrap(~sentiment, scales = "free_y") + labs(y = "Contribution to sentiment", x = NULL, title = " For failed projects") + coord_flip()
+emo2
+```
+In these to graph, we can find out that the most frequent words that appeared in the successful projects is arts, which represents anticipation, joy, sadness and surprise. We can find that for most words in Failed projects and successful projects, the frequent words in each sentiment are the same. However, the frequency is different.
